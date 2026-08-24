@@ -1,0 +1,31 @@
+{
+  "name": "discord-community-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local-first MCP server for Discord search, conversation recall, community research, and growth analysis.",
+  "type": "module",
+  "bin": {
+    "discord-community-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "npm run build && node --test dist/**/*.test.js"
+  },
+  "engines": {
+    "node": ">=22.5"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "discord-api-types": "^0.38.50",
+    "discord.js": "^14.27.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^7.0.2"
+  }
+}
