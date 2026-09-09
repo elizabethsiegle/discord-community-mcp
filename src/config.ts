@@ -11,12 +11,17 @@ const envSchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
+  DISCORD_ENABLE_ROLE_MANAGEMENT: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
   DISCORD_ANALYTICS_DB: z.string().min(1).default(defaultAnalyticsDb),
 });
 
 export type Config = {
   discordBotToken: string;
   writeEnabled: boolean;
+  roleManagementEnabled: boolean;
   analyticsDbPath: string;
 };
 
@@ -33,6 +38,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     discordBotToken: parsed.data.DISCORD_BOT_TOKEN,
     writeEnabled: parsed.data.DISCORD_ENABLE_WRITE,
+    roleManagementEnabled: parsed.data.DISCORD_ENABLE_ROLE_MANAGEMENT,
     analyticsDbPath: parsed.data.DISCORD_ANALYTICS_DB,
   };
 }

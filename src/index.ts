@@ -31,7 +31,7 @@ async function main(): Promise<void> {
   console.error(
     `Discord MCP server connected as ${service.client.user?.tag ?? "unknown bot"} (writes ${
       config.writeEnabled ? "enabled" : "disabled"
-    })`,
+    }, role management ${config.roleManagementEnabled ? "enabled" : "disabled"})`,
   );
 }
 

@@ -9,7 +9,7 @@ A local-first [Model Context Protocol](https://modelcontextprotocol.io/) server 
 - Index selected Discord history in a local SQLite database
 - Analyze activity, response times, participation, concentration, reciprocity, and themes
 - Save member snapshots and analyze joins, departures, roles, and contributor growth
-- Optionally send messages, replies, and reactions
+- Optionally send messages, replies, reactions, and assign existing roles
 
 ## Requirements
 
@@ -26,10 +26,13 @@ A local-first [Model Context Protocol](https://modelcontextprotocol.io/) server 
    - **Server Members Intent** for member snapshots, join dates, roles, and growth
 4. **Presence Intent is not required.**
 5. Under **OAuth2 → URL Generator**, select the `bot` scope.
-6. Give the bot **View Channels** and **Read Message History**. Add **Send Messages** or **Add Reactions** only if you plan to enable write tools.
+6. Give the bot **View Channels** and **Read Message History**. Add **Send Messages**, **Add Reactions**, or **Manage Roles** only for the write tools you plan to use.
 7. Open the generated URL and invite the bot to your Discord server.
 
 The bot can only access channels its Discord role is allowed to view.
+
+For role assignment, place the bot's role above the roles it may assign in **Server Settings → Roles**.
+Keep it below staff and administrator roles so Discord's hierarchy limits what the bot can grant.
 
 ## 2. Install
 
@@ -46,6 +49,7 @@ Open `.env` and replace the placeholder token:
 ```dotenv
 DISCORD_BOT_TOKEN=replace-with-your-bot-token
 DISCORD_ENABLE_WRITE=false
+DISCORD_ENABLE_ROLE_MANAGEMENT=false
 ```
 
 Keep `.env` private. It is excluded from git.
@@ -112,6 +116,7 @@ For broad analysis, the agent should first synchronize the relevant channels and
 | `discord_send_message` | Send a message when writes are enabled |
 | `discord_reply_to_message` | Reply when writes are enabled |
 | `discord_add_reaction` | React when writes are enabled |
+| `discord_add_member_role` | Assign an existing role when role management is enabled |
 
 ## Data and privacy
 
@@ -125,6 +130,7 @@ DISCORD_ANALYTICS_DB=/absolute/private/path/discord-analytics.sqlite
 - Protect and delete the database according to your community's privacy policy.
 - Give the bot the minimum Discord permissions it needs.
 - Keep `DISCORD_ENABLE_WRITE=false` unless sending content is intentional.
+- Keep `DISCORD_ENABLE_ROLE_MANAGEMENT=false` unless assigning roles is intentional.
 - Rotate the bot token immediately if it is exposed.
 
 ## Analysis limitations
@@ -139,10 +145,11 @@ DISCORD_ANALYTICS_DB=/absolute/private/path/discord-analytics.sqlite
 
 ## Write access
 
-Write tools are registered but blocked by default. To enable them, update `.env`:
+Write tools are registered but blocked by default. Enable only the capability you need in `.env`:
 
 ```dotenv
 DISCORD_ENABLE_WRITE=true
+DISCORD_ENABLE_ROLE_MANAGEMENT=true
 ```
 
 The bot must also have the corresponding Discord permissions. Keep writes disabled for research-only installations.

@@ -39,6 +39,20 @@ function requireWrite(config: Config): ToolResult | undefined {
   };
 }
 
+function requireRoleManagement(config: Config): ToolResult | undefined {
+  if (config.roleManagementEnabled) return undefined;
+
+  return {
+    isError: true,
+    content: [
+      {
+        type: "text",
+        text: "Discord role management is disabled. Set DISCORD_ENABLE_ROLE_MANAGEMENT=true to enable it.",
+      },
+    ],
+  };
+}
+
 export function createServer(
   service: DiscordService,
   config: Config,
@@ -504,6 +518,39 @@ export function createServer(
       try {
         await service.addReaction(channel_id, message_id, emoji);
         return jsonResult({ success: true });
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "discord_add_member_role",
+    {
+      title: "Assign a Discord role to a member",
+      description:
+        "Assign an existing server role to a member, which can grant access to role-restricted channels. Requires DISCORD_ENABLE_ROLE_MANAGEMENT=true, the bot's Manage Roles permission, and the bot role to be above the assigned role.",
+      inputSchema: {
+        guild_id: snowflake.describe("Discord server/guild ID"),
+        member_id: snowflake.describe("Discord user ID for the server member"),
+        role_id: snowflake.describe("Existing Discord role ID to assign"),
+        reason: z
+          .string()
+          .trim()
+          .min(1)
+          .max(512)
+          .optional()
+          .describe("Optional reason recorded in the Discord audit log"),
+      },
+    },
+    async ({ guild_id, member_id, role_id, reason }) => {
+      const disabled = requireRoleManagement(config);
+      if (disabled) return disabled;
+
+      try {
+        return jsonResult(
+          await service.addMemberRole(guild_id, member_id, role_id, reason),
+        );
       } catch (error) {
         return errorResult(error);
       }

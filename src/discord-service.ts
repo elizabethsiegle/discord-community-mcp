@@ -43,6 +43,21 @@ export type MembershipSnapshot = {
   members: MemberSummary[];
 };
 
+export type MemberRoleAssignment = {
+  guildId: string;
+  guildName: string;
+  member: {
+    id: string;
+    username: string;
+    displayName: string;
+  };
+  role: {
+    id: string;
+    name: string;
+  };
+  changed: boolean;
+};
+
 export type ChannelSummary = {
   id: string;
   guildId: string;
@@ -369,6 +384,49 @@ export class DiscordService {
     const channel = await this.fetchTextChannel(channelId);
     const message = await channel.messages.fetch(messageId);
     await message.react(emoji);
+  }
+
+  async addMemberRole(
+    guildId: string,
+    memberId: string,
+    roleId: string,
+    reason?: string,
+  ): Promise<MemberRoleAssignment> {
+    const guild = await this.fetchGuild(guildId);
+    const [member, role] = await Promise.all([
+      guild.members.fetch(memberId),
+      guild.roles.fetch(roleId),
+    ]);
+
+    if (!role) {
+      throw new Error(`Role ${roleId} was not found in guild ${guildId}`);
+    }
+    if (role.id === guild.id) {
+      throw new Error("The @everyone role cannot be assigned to an individual member");
+    }
+    if (role.managed) {
+      throw new Error(`Role ${role.name} is managed by an integration and cannot be assigned manually`);
+    }
+
+    const alreadyAssigned = member.roles.cache.has(role.id);
+    if (!alreadyAssigned) {
+      await member.roles.add(role, reason);
+    }
+
+    return {
+      guildId: guild.id,
+      guildName: guild.name,
+      member: {
+        id: member.id,
+        username: member.user.username,
+        displayName: member.displayName,
+      },
+      role: {
+        id: role.id,
+        name: role.name,
+      },
+      changed: !alreadyAssigned,
+    };
   }
 
   private async fetchGuild(guildId: string): Promise<Guild> {
