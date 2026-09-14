@@ -141,6 +141,10 @@ DISCORD_ANALYTICS_DB=/absolute/private/path/discord-analytics.sqlite
 - Exact departures are detected only between saved member snapshots.
 - A first member snapshot cannot recover people who left before the bot observed them.
 - Search and analytics cover only channels visible to the bot and history that was synchronized.
+- Channels the bot cannot read are skipped rather than failing the sync. Check `skippedChannels` in the
+  sync result to see what was left out and why, because coverage gaps there will silently understate
+  every aggregate that follows.
+- Forum channels are not indexed.
 - Direct messages are not supported.
 
 ## Write access

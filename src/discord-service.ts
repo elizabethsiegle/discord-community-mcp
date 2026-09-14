@@ -3,6 +3,7 @@ import {
   Client,
   DiscordAPIError,
   GatewayIntentBits,
+  PermissionFlagsBits,
   Routes,
   type Guild,
   type GuildTextBasedChannel,
@@ -214,22 +215,34 @@ export class DiscordService {
   async listReadableChannels(guildId: string): Promise<ChannelSummary[]> {
     const guild = await this.fetchGuild(guildId);
     const channels = await guild.channels.fetch();
+    const botMember = guild.members.me ?? (await guild.members.fetchMe());
 
     return [...channels.values()]
-      .flatMap((channel) =>
-        channel && channel.isTextBased()
-          ? [
-              {
-                id: channel.id,
-                guildId: channel.guildId,
-                name: channel.name,
-                type: ChannelType[channel.type] ?? String(channel.type),
-                parentId: channel.parentId,
-                position: channel.position,
-              },
-            ]
-          : [],
-      )
+      .flatMap((channel) => {
+        if (!channel?.isTextBased()) return [];
+
+        // Being text-based is not the same as being readable: the bot's role may
+        // lack View Channel or Read Message History on any individual channel.
+        // Listing those channels makes callers fail with Discord error 50001.
+        const permissions = channel.permissionsFor(botMember);
+        if (
+          !permissions?.has(PermissionFlagsBits.ViewChannel) ||
+          !permissions.has(PermissionFlagsBits.ReadMessageHistory)
+        ) {
+          return [];
+        }
+
+        return [
+          {
+            id: channel.id,
+            guildId: channel.guildId,
+            name: channel.name,
+            type: ChannelType[channel.type] ?? String(channel.type),
+            parentId: channel.parentId,
+            position: channel.position,
+          },
+        ];
+      })
       .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
   }
 

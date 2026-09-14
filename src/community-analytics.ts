@@ -4,7 +4,8 @@ import type {
   GrowthFilters,
 } from "./analytics-repository.js";
 import { DiscordAPIError } from "discord.js";
-import type { DiscordService } from "./discord-service.js";
+import { describeDiscordError } from "./discord-service.js";
+import type { ChannelSummary, DiscordService } from "./discord-service.js";
 
 export type SyncHistoryOptions = {
   guildId: string;
@@ -81,8 +82,24 @@ export class CommunityAnalyticsService {
   }
 
   async syncHistory(options: SyncHistoryOptions): Promise<Record<string, unknown>> {
+    const skippedChannels: Array<Record<string, unknown>> = [];
     const availableChannels = options.channelIds?.length
-      ? await Promise.all(options.channelIds.map((channelId) => this.discord.getReadableChannel(channelId)))
+      ? (
+          await Promise.all(
+            options.channelIds.map(async (channelId) => {
+              try {
+                return await this.discord.getReadableChannel(channelId);
+              } catch (error) {
+                skippedChannels.push({
+                  channelId,
+                  channelName: null,
+                  reason: describeDiscordError(error),
+                });
+                return null;
+              }
+            }),
+          )
+        ).filter((channel): channel is ChannelSummary => channel !== null)
       : await this.discord.listReadableChannels(options.guildId);
     const wrongGuild = availableChannels.find((channel) => channel.guildId !== options.guildId);
     if (wrongGuild) {
@@ -103,41 +120,52 @@ export class CommunityAnalyticsService {
       let oldestMessageAt: string | null = null;
       let newestMessageAt: string | null = null;
 
-      while (scanned < options.maxMessagesPerChannel) {
-        const pageLimit = Math.min(100, options.maxMessagesPerChannel - scanned);
-        const page = await this.discord.readMessages(channel.id, pageLimit, beforeCursor);
-        if (page.length === 0) {
-          reachedBeginning = true;
-          break;
-        }
+      try {
+        while (scanned < options.maxMessagesPerChannel) {
+          const pageLimit = Math.min(100, options.maxMessagesPerChannel - scanned);
+          const page = await this.discord.readMessages(channel.id, pageLimit, beforeCursor);
+          if (page.length === 0) {
+            reachedBeginning = true;
+            break;
+          }
 
-        scanned += page.length;
-        const withinRange = page.filter((message) => {
-          if (options.after && message.createdAt < options.after) return false;
-          if (options.before && message.createdAt >= options.before) return false;
-          return true;
+          scanned += page.length;
+          const withinRange = page.filter((message) => {
+            if (options.after && message.createdAt < options.after) return false;
+            if (options.before && message.createdAt >= options.before) return false;
+            return true;
+          });
+          emptyContentMessages += withinRange.filter((message) => message.content === "").length;
+          indexed += this.repository.upsertMessages(
+            withinRange.map((message) => ({ ...message, channelName: channel.name })),
+          );
+
+          for (const message of withinRange) {
+            if (!oldestMessageAt || message.createdAt < oldestMessageAt) oldestMessageAt = message.createdAt;
+            if (!newestMessageAt || message.createdAt > newestMessageAt) newestMessageAt = message.createdAt;
+          }
+
+          const oldest = page[0];
+          if (!oldest) break;
+          if (options.after && oldest.createdAt <= options.after) {
+            reachedAfterBoundary = true;
+            break;
+          }
+          if (page.length < pageLimit) {
+            reachedBeginning = true;
+            break;
+          }
+          beforeCursor = oldest.id;
+        }
+      } catch (error) {
+        // One unreadable channel must not discard the rest of the sweep. Skip it and
+        // leave its previous coverage row untouched rather than recording a partial sync.
+        skippedChannels.push({
+          channelId: channel.id,
+          channelName: channel.name,
+          reason: describeDiscordError(error),
         });
-        emptyContentMessages += withinRange.filter((message) => message.content === "").length;
-        indexed += this.repository.upsertMessages(
-          withinRange.map((message) => ({ ...message, channelName: channel.name })),
-        );
-
-        for (const message of withinRange) {
-          if (!oldestMessageAt || message.createdAt < oldestMessageAt) oldestMessageAt = message.createdAt;
-          if (!newestMessageAt || message.createdAt > newestMessageAt) newestMessageAt = message.createdAt;
-        }
-
-        const oldest = page[0];
-        if (!oldest) break;
-        if (options.after && oldest.createdAt <= options.after) {
-          reachedAfterBoundary = true;
-          break;
-        }
-        if (page.length < pageLimit) {
-          reachedBeginning = true;
-          break;
-        }
-        beforeCursor = oldest.id;
+        continue;
       }
 
       const truncated = !reachedBeginning && !reachedAfterBoundary && scanned >= options.maxMessagesPerChannel;
@@ -166,6 +194,8 @@ export class CommunityAnalyticsService {
       indexedMessages: totalIndexed,
       selectedChannels: selectedChannels.length,
       omittedReadableChannels: Math.max(0, availableChannels.length - selectedChannels.length),
+      skippedChannelCount: skippedChannels.length,
+      skippedChannels,
       emptyContentMessages,
       messageContentIntentWarning:
         emptyContentMessages > 0
